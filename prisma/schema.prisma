@@ -7,18 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model User {
-  id        String     @id @default(uuid())
-  email     String  @unique
-  password  String
-  firstName      String
-  lastName       String
-  companyName    String
-  role           RoleType 
-  status         UserStatus @default(INVITED)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String     @id @default(uuid())
+  email       String     @unique
+  password    String
+  firstName   String
+  lastName    String
+  companyName String?
+  aboutCompany String?
+  role        RoleType
+  status      UserStatus @default(INVITED)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime?   @updatedAt
 }
 
 enum RoleType {
@@ -32,6 +32,6 @@ enum RoleType {
 
 enum UserStatus {
   INVITED
-  ACTIVE
+  JOINED
   DEACTIVATED
 }
