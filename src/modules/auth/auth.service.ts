@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
 import { UserService } from '../user/user.service';
@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthHelpers } from '../../shared/helpers/auth.helpers';
 import { GLOBAL_CONFIG } from '../../configs/global.config';
 
-
+import * as jwt from 'jsonwebtoken';
 import { UserRegisterDto } from './dto/UserRegister.dto';
 import { UserLoginDto } from './dto/UserLogin.dto';
 import { AuthResponseDTO } from './dto/AuthResponse.dto';
@@ -16,6 +16,11 @@ import { ResetPasswordDto } from './dto/ResetPassword.dto';
 import { ForgotPasswordDecodedPayload } from 'src/interfaces/ForgotPasswordPayload';
 import { genSalt, hash } from 'bcrypt';
 import { EmailService } from '../email/email.service';
+import { JWT_SECRET } from 'src/shared/constants/global.constants';
+import { CheckLinkDto } from './dto/CheckLink.dto';
+import { PasswordResponseDto } from './dto/PasswordResponse.dto';
+import { TokenPayloadDto } from './dto/TokenPayload.dto';
+import { UserDto } from './dto/User.dto';
 
 @Injectable()
 export class AuthService {
@@ -26,7 +31,7 @@ export class AuthService {
     private emailService: EmailService,
   ) {}
 
-  public async login(userLoginDto: UserLoginDto): Promise<AuthResponseDTO> {
+  public async login(userLoginDto: UserLoginDto): Promise<User> {
     const userData = await this.userService.findUser(userLoginDto.email);
     
     if (!userData) {
@@ -42,68 +47,34 @@ export class AuthService {
     if (!isMatch) {
       throw new UnauthorizedException('Incorrect Email or Password');
     }
-
-    const payload = {
-      id: userData.id,
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      companyName: userData.companyName,
-      email: userData.email,
-      password: null,
-      role: userData.role,
-      createdAt: userData.createdAt,
-      updatedAt: userData.updatedAt
-    };
-
-    const accessToken = this.jwtService.sign(payload, {
-      expiresIn: GLOBAL_CONFIG.security.expiresIn,
-    });
-
-    return {
-      user: payload,
-      accessToken: accessToken,
-    };
+    return userData;
   }
 
-  public async register(user: UserRegisterDto): Promise<AuthResponseDTO> {
-    const userCreated = await this.userService.createUser(user);
-    const payload = {
-      id: userCreated.id,
-      firstName: userCreated.firstName,
-      lastName: userCreated.lastName,
-      companyName: userCreated.companyName,
-      email: userCreated.email,
-      password: null,
-      role: userCreated.role,
-      createdAt: userCreated.createdAt,
-      updatedAt: userCreated.updatedAt
-    };
-
-    const accessToken = this.jwtService.sign(payload, {
-      expiresIn: GLOBAL_CONFIG.security.expiresIn,
-    });
-
-    return {
-      user: payload,
-      accessToken: accessToken,
-    };
+  public async register(userRegisterDto: UserRegisterDto): Promise<User> {
+    const userCreated = await this.userService.createUser(userRegisterDto);
+    return userCreated;
   }
 
-  public async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<boolean> {
+  public async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<PasswordResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { email: forgotPasswordDto.email}
     });
 
     if (!user) {
-      throw new BadRequestException('User with this email was not found');
+      throw new BadRequestException('User with this email does not exist');
+    }
+    const secret = JWT_SECRET + user.password;
+
+    const payload = {
+      email: user.email,
+      id: user.id
     }
 
-    const token = this.jwtService.sign({
-      email: forgotPasswordDto.email,
+    const token =  jwt.sign(payload, secret, {
+      expiresIn: '15m'    
     });
 
-    const forgotPasswordRoute = 'forgot-password/confirm';
-    const confirmPassChangeURL = `${process.env.FRONTEND_URL}/${forgotPasswordRoute}/${token}`;
+    const confirmPassChangeURL = `${process.env.FRONTEND_URL}/${user.id}/${token}`;
     Logger.log(confirmPassChangeURL)
     
     this.emailService.sendEmail(
@@ -117,9 +88,13 @@ export class AuthService {
       }
     );
     
-    
-    return true;
-    // return confirmPassChangeURL;
+    // Sending the token and user Id for testing purposes not meant for production
+    const passwordPayload = {
+      userId: user.id,
+      token
+    }
+
+    return passwordPayload;
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<boolean> {
@@ -132,6 +107,18 @@ export class AuthService {
     if (!user) {
       throw new BadRequestException('User with this email was not found');
     } 
+
+    const secret = JWT_SECRET + user.password;
+    try {
+    const tokenVerified = jwt.verify(resetPasswordDto.token, secret);
+
+    if(!tokenVerified) {
+      throw new BadRequestException('Password could not be reset');
+    }
+    } catch (error) {
+      throw new HttpException('The Reset Password link expired', HttpStatus.BAD_REQUEST);
+    }
+
     const salt = await genSalt(10);
     const hashedPassword = await hash(resetPasswordDto.password, salt);
     user.password = hashedPassword;
@@ -142,4 +129,38 @@ export class AuthService {
     return true;
   }
 
+  async checkLinkExpiry(checkLinkDto: CheckLinkDto): Promise<boolean> {
+    const decoded = this.jwtService.decode(checkLinkDto.token) as ForgotPasswordDecodedPayload;
+    const email = decoded.email;
+    const { id } = checkLinkDto;
+
+    const user = await this.prisma.user.findFirst({
+      where: { id, email }
+    });
+    
+    if (!user) {
+      throw new BadRequestException('User with this email or Id was not found');
+    } 
+
+    const secret = JWT_SECRET + user.password;
+    try {
+      const tokenVerified = jwt.verify(checkLinkDto.token, secret);
+
+      if(!tokenVerified) {
+        throw new HttpException('The Reset Password link expired', HttpStatus.BAD_REQUEST);
+      }
+    } catch (error) {
+      throw new HttpException('The Reset Password link expired', HttpStatus.BAD_REQUEST);
+    }
+    return true;
+  }
+
+  async createToken(user: User): Promise<TokenPayloadDto> {
+    const expiresIn = GLOBAL_CONFIG.security.expiresIn;
+    const accessToken = this.jwtService.sign(user, {
+      expiresIn,
+    });
+    
+    return new TokenPayloadDto(expiresIn, accessToken)
+  }
 }

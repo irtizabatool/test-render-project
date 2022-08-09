@@ -1,6 +1,12 @@
-import { RoleType, User } from '@prisma/client';
+import { TokenPayloadDto } from './TokenPayload.dto';
+import { UserDto } from './User.dto';
 
 export class AuthResponseDTO {
-  user: User;
-  accessToken: string;
+  user: UserDto;
+  token: TokenPayloadDto;
+  
+  constructor(user: UserDto, token: TokenPayloadDto) {
+    this.user = user;
+    this.token = token;
+  }
 }

@@ -6,21 +6,26 @@ import { UserLoginDto } from "./dto/UserLogin.dto";
 import { ForgotPasswordDto } from "./dto/ForgotPassword.dto";
 import { ResetPasswordDto } from "./dto/ResetPassword.dto";
 import { ResponseSuccess } from "src/common/dto/ResponseSuccess.dto";
+import { CheckLinkDto } from "./dto/CheckLink.dto";
+import { AuthResponseDTO } from "./dto/AuthResponse.dto";
+import { UserDto } from "./dto/User.dto";
 
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post("login")
-  async login(@Body() user: UserLoginDto): Promise<ResponseSuccess> {
-    const userData = await this.authService.login(user);
-    return new ResponseSuccess(`User info with access token`, userData);
+  async login(@Body() userLoginDto: UserLoginDto): Promise<ResponseSuccess> {
+    const userData = await this.authService.login(userLoginDto);
+    const token = await this.authService.createToken(userData);
+    return new ResponseSuccess(`User info with access token`, new AuthResponseDTO(new UserDto(userData), token));
   }
 
   @Post("register")
-  async register(@Body() user: UserRegisterDto): Promise<ResponseSuccess> {
-    const createdUser = await this.authService.register(user);
-    return new ResponseSuccess(`Successfully Registered.`, createdUser);
+  async register(@Body() UserRegisterDto: UserRegisterDto): Promise<ResponseSuccess> {
+    const createdUser = await this.authService.register(UserRegisterDto);
+    const token = await this.authService.createToken(createdUser);
+    return new ResponseSuccess(`User info with access token`, new AuthResponseDTO(new UserDto(createdUser), token));
   }
 
   @Post("forgot-password")
@@ -44,6 +49,17 @@ export class AuthController {
     return new ResponseSuccess(
       `Changed Password Successfully`,
       passwordChanged
+    );
+  }
+
+  @Post('check-link')
+  async checkLinkExpiry(
+    @Body() checkLinkDto: CheckLinkDto
+  ): Promise<ResponseSuccess> {
+    const linkCheck = await this.authService.checkLinkExpiry(checkLinkDto);
+    return new ResponseSuccess(
+      'The link is Valid',
+      linkCheck
     );
   }
 }

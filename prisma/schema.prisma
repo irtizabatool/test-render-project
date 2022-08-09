@@ -15,12 +15,23 @@ model User {
   firstName      String
   lastName       String
   companyName    String
-  role           RoleType @default(USER)
+  role           RoleType 
+  status         UserStatus @default(INVITED)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
 
 enum RoleType {
-  USER
-  ADMIN
+  SUPER_ADMIN
+  RECRUITER_ADMIN
+  TEAM_LEAD
+  INTERVIEWER
+  RESUME_SCREENER
+  TELEPHONE_SCREENER
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DEACTIVATED
 }
