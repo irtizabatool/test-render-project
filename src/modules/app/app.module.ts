@@ -12,6 +12,7 @@ import { AppController } from './app.controller';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import path from 'path';
+import { AccountModule } from '../account/account.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import path from 'path';
     PrismaModule,
     AuthModule,
     UserModule,
+    AccountModule,
     ConfigModule.forRoot({ isGlobal: true, load: [() => GLOBAL_CONFIG] }),
     MailerModule.forRoot({
       transport: {

@@ -8,17 +8,50 @@ datasource db {
 }
 
 model User {
-  id          String     @id @default(uuid())
-  email       String     @unique
-  password    String
-  firstName   String
-  lastName    String
-  companyName String?
-  aboutCompany String?
-  role        RoleType
-  status      UserStatus @default(INVITED)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime?   @updatedAt
+  id             String       @id @default(uuid())
+  email          String       @unique
+  password       String
+  firstName      String
+  lastName       String
+  profilePicture String?
+  role           RoleType
+  status         UserStatus   @default(INVITED)
+  loginAccess    Boolean      @default(true)
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime?    @updatedAt
+}
+
+model ResumeSource {
+  id             String       @id @default(uuid())
+  sourceName     String
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  deleted        Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime?    @updatedAt
+}
+
+model Skill {
+  id             String       @id @default(uuid())
+  skillName      String
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  deleted        Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime?    @updatedAt
+}
+
+model Organisation {
+  id                 String         @id @default(uuid())
+  companyName        String
+  companyDescription String?
+  users              User[]
+  resumeSources      ResumeSource[]
+  skills             Skill[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime?      @updatedAt
 }
 
 enum RoleType {

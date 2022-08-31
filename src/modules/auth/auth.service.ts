@@ -10,7 +10,7 @@ import * as jwt from 'jsonwebtoken';
 import { UserRegisterDto } from './dto/UserRegister.dto';
 import { UserLoginDto } from './dto/UserLogin.dto';
 import { AuthResponseDTO } from './dto/AuthResponse.dto';
-import { User } from '@prisma/client';
+import { User, UserStatus } from '@prisma/client';
 import { ForgotPasswordDto } from './dto/ForgotPassword.dto';
 import { ResetPasswordDto } from './dto/ResetPassword.dto';
 import { ForgotPasswordDecodedPayload } from 'src/interfaces/ForgotPasswordPayload';
@@ -32,10 +32,15 @@ export class AuthService {
   ) {}
 
   public async login(userLoginDto: UserLoginDto): Promise<User> {
+    userLoginDto.email = userLoginDto.email.toLowerCase();
     const userData = await this.userService.findUser(userLoginDto.email);
     
     if (!userData) {
       throw new UnauthorizedException('Incorrect Email or Password');
+    }
+
+    if(userData.loginAccess === false || userData.status === UserStatus.DEACTIVATED) {
+      throw new UnauthorizedException('Your account has been deactivated, for more information please contact the admin');
     }
 
     const isMatch = await AuthHelpers.validateHash(
@@ -63,6 +68,11 @@ export class AuthService {
     if (!user) {
       throw new BadRequestException('User with this email does not exist');
     }
+
+    if (!user.loginAccess || user.status === UserStatus.DEACTIVATED) {
+      throw new UnauthorizedException('Your account has been deactivated, for more information please contact the admin');
+    }
+
     const secret = JWT_SECRET + user.password;
 
     const payload = {
@@ -84,7 +94,8 @@ export class AuthService {
       'Reset Password Link',
       './reset-password',
       {
-        link: confirmPassChangeURL
+        link: confirmPassChangeURL,
+        user: user.firstName
       }
     );
     
@@ -98,8 +109,14 @@ export class AuthService {
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<boolean> {
-    const decoded = this.jwtService.decode(resetPasswordDto.token) as ForgotPasswordDecodedPayload;
-    const email = decoded.email;
+    let email;
+    try {
+      const decoded = jwt.decode(resetPasswordDto.token) as ForgotPasswordDecodedPayload;
+     email = decoded.email;
+    } catch (error) {
+      Logger.log(error);
+      throw new HttpException('Something went wrong', HttpStatus.BAD_REQUEST);
+    }
 
     const user = await this.prisma.user.findUnique({
       where: { email }
@@ -107,6 +124,10 @@ export class AuthService {
     if (!user) {
       throw new BadRequestException('User with this email was not found');
     } 
+
+    if (!user.loginAccess || user.status === UserStatus.DEACTIVATED) {
+      throw new UnauthorizedException('Your account has been deactivated, for more information please contact the admin');
+    }
 
     const secret = JWT_SECRET + user.password;
     try {
@@ -130,8 +151,14 @@ export class AuthService {
   }
 
   async checkLinkExpiry(checkLinkDto: CheckLinkDto): Promise<boolean> {
-    const decoded = this.jwtService.decode(checkLinkDto.token) as ForgotPasswordDecodedPayload;
-    const email = decoded.email;
+    let email;
+    try {
+      const decoded = jwt.decode(checkLinkDto.token) as ForgotPasswordDecodedPayload;
+     email = decoded.email;
+    } catch (error) {
+      Logger.log(error);
+      throw new HttpException('Something went wrong', HttpStatus.BAD_REQUEST);
+    }
     const { id } = checkLinkDto;
 
     const user = await this.prisma.user.findFirst({
@@ -140,17 +167,21 @@ export class AuthService {
     
     if (!user) {
       throw new BadRequestException('User with this email or Id was not found');
-    } 
+    }
+
+    if (!user.loginAccess && user.status === UserStatus.DEACTIVATED) {
+      throw new UnauthorizedException('Your account has been deactivated, for more information please contact the admin');
+    }
 
     const secret = JWT_SECRET + user.password;
     try {
       const tokenVerified = jwt.verify(checkLinkDto.token, secret);
 
       if(!tokenVerified) {
-        throw new HttpException('The Reset Password link expired', HttpStatus.BAD_REQUEST);
+        throw new HttpException('The link you followed has expired', HttpStatus.BAD_REQUEST);
       }
     } catch (error) {
-      throw new HttpException('The Reset Password link expired', HttpStatus.BAD_REQUEST);
+      throw new HttpException('The link you followed has expired', HttpStatus.BAD_REQUEST);
     }
     return true;
   }

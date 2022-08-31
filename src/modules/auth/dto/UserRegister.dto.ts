@@ -35,12 +35,6 @@ export class UserRegisterDto {
   })
   lastName: string;
 
-  @IsString({ message: `Company name ${STRING_VALUE}` })
-  @IsNotEmpty({
-    message: `Company name ${EMPTY_FIELD}`,
-  })
-  companyName: string;
-
   @IsString({ message: `Password ${STRING_VALUE}` })
   @IsNotEmpty({
     message: `Password ${EMPTY_FIELD}`,

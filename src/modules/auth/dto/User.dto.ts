@@ -1,4 +1,4 @@
-import { RoleType, User, UserStatus } from "@prisma/client";
+import { Organisation, RoleType, User, UserStatus } from "@prisma/client";
 
 export class UserDto {
     id: string;
@@ -13,24 +13,21 @@ export class UserDto {
 
     status: UserStatus;
 
-    companyName: string;
-
-    aboutCompany: string;
-
     createdAt: Date;
 
     updatedAt: Date;
+    
+    organisation: Organisation;
 
-    constructor(user: User) {
+    constructor(user: any) {
         this.id = user.id;
         this.email = user.email;
         this.firstName = user.firstName;
         this.lastName = user.lastName;
         this.role = user.role;
         this.status = user.status;
-        this.companyName = user.companyName;
-        this.aboutCompany = user.aboutCompany;
         this.createdAt = user.createdAt;
-        this.updatedAt = user.updatedAt
+        this.updatedAt = user.updatedAt;
+        this.organisation = user.organisation? user.organisation : null;
     }
 }
